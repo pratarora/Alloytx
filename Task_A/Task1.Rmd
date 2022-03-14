@@ -1,0 +1,389 @@
+---
+title: "Rep-Seq Analysis"
+output: 
+  html_notebook:
+      toc: true
+      theme: united
+      df_print: paged
+      toc_float: true
+---
+
+# Clean memory and set directory
+```{r}
+rm(list = ls())
+gc()
+setwd("/mnt/c/Users/prata/Desktop/Alloytx/Task_Bioinformatics/Task_Bioinformatics/data/")
+getwd()
+set.seed(1234)
+```
+
+# Load libraries
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library("ComplexHeatmap")
+library(rstatix)
+library(ggpubr)
+```
+
+# Read Dataset_A
+
+```{r}
+a_raw <- read.csv("Task_1_dataset_A.csv", na.strings = "") # read csv
+head(a_raw)
+dim(a_raw) # check the dimension of the data frame
+```
+
+## Check for incomplete data
+
+```{r}
+sapply(a_raw, function(x) sum(is.na(x))) # check all columns for NAs
+```
+
+## Remove incomplete rows
+
+```{r}
+a_no_na <- a_raw %>% na.omit() # remove all rows with any na
+dim(a_no_na) # check what is the new dimension od the data frame
+sapply(a_no_na, function(x) sum(is.na(x))) # recheck if there is any na
+```
+
+## Remove the amino acid sequences with * or stop codons
+
+```{r}
+a_no_stop <- a_no_na[!grepl("\\*", a_no_na$cdr3_aa),]
+head(a_no_stop)
+dim(a_no_stop)
+```
+
+## Remove any sequence which is smaller than 4 AA
+
+anything below 4 AA can be a random event/error so removing them to make the data cleaner
+
+```{r}
+
+a_no_stop[nchar(a_no_stop$cdr3_aa)<=5,]
+
+# 5 amino acid long seems to be part of a conserved sequence
+```
+```{r}
+a_no_stop[nchar(a_no_stop$cdr3_aa)<=4,]
+# <=4 seems random and non specific-- needs cleaning
+```
+
+```{r}
+a_no_small <- a_no_stop[!nchar(a_no_stop$cdr3_aa)<=4,]
+dim(a_no_small)
+head(a_no_small)
+
+```
+
+```{r}
+a_no_dups <- a_no_small[!duplicated(a_no_small),]
+dim(a_no_dups)
+a_no_dups %>% head
+
+```
+
+# Function for cleaning
+
+Since the same cleaning needs to be applied to dataset B and presumably other datasets in future it seems more practical to make a function to clean them all
+
+
+```{r}
+clean_df <- function(df){
+  
+  print("dimension of df")
+  df %>% dim() %>% print()
+  
+  df_na <- df %>% na.omit()
+  print("dimension of df after removing NAs")
+  df_na %>% dim() %>% print(.)
+  
+  df_stop <- df_na[!grepl("\\*", df_na$cdr3_aa),]
+  print("dimension of df after removing stop codon containing amino acids")
+  df_stop %>% dim() %>% print()
+  
+  df_no_small <- df_stop[!nchar(df_stop$cdr3_aa)<=4,]
+  print("dimension of df after removing sequences which are smaller than 4 amino acids")
+  df_no_small %>% dim() %>% print()
+  
+  df_no_dups <- df_no_small[!duplicated(df_no_small),]
+    print("dimension of df after removing duplicate sequences")
+  df_no_dups %>% dim() %>% print()
+  
+  print("df cleaned")
+  
+  return(df_no_dups)
+}
+```
+
+```{r}
+a_cleaned <- clean_df(a_raw)
+head(a_cleaned)
+```
+
+```{r}
+b_raw <- read.csv("Task_1_dataset_B.csv", na.strings = "")
+head(b_raw)
+
+```
+
+```{r}
+b_cleaned <- clean_df(b_raw)
+head(b_cleaned)
+
+```
+
+# cross check if the function is working properly on new data
+
+```{r}
+sapply(b_cleaned, function(x) sum(is.na(x))) # recheck if there is any na
+b_cleaned[grepl("\\*", b_cleaned$cdr3_aa),] # recheck if there is any asterix
+b_cleaned[nchar(b_cleaned$cdr3_aa)<=4,] # recheck if there is any amino acid <=4
+b_cleaned[duplicated(b_cleaned),] # recheck if there are any duplicated rows
+```
+
+
+```{r}
+metadata <- read.csv("metadata.csv")
+head(metadata)
+```
+
+
+```{r}
+a_cleaned$status <- "healthy"
+head(a_cleaned)
+b_cleaned$status <- "disease"
+head(b_cleaned)
+```
+
+```{r}
+a_b_bind <- rbind(a_cleaned, b_cleaned)
+head(a_b_bind)
+tail(a_b_bind)
+dim(a_b_bind)
+```
+```{r}
+a_b_bind <- a_b_bind %>% arrange(status)
+a_b_bind %>% head
+```
+
+
+```{r}
+a_b_bind$cdr_length <- nchar(a_b_bind$cdr3_aa)
+head(a_b_bind)
+```
+
+
+# check if data is normal distribution
+
+```{r}
+
+shapiro.test(a_b_bind$cdr_length)
+
+#data is not normally distributed
+```
+
+
+
+```{r}
+# applying non parametric test to check for significance
+wilcox.test(a_b_bind$cdr_length~a_b_bind$status)
+
+```
+
+
+```{r}
+wilcox_df <- a_b_bind %>% wilcox_test(cdr_length~status) %>% add_significance() %>% add_xy_position()
+wilcox_df
+```
+
+## Plot Violin Plot for CD3 length comparison
+
+```{r}
+ggviolin(a_b_bind, x = "status", y = "cdr_length", fill= "status", add= "boxplot", alpha=0.5) + 
+  rremove("legend")+
+  stat_pvalue_manual(wilcox_df, label = "p")+ 
+  labs(y="Length of CDR3 fragment", x= "Disease Status", title = "Comparison of CDR3 length across disease conditons" ) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+dev.copy(
+  svg,
+  width=8,
+  height=8,
+  file=  "CD3_length_comparison_violinplot.svg"
+)
+dev.off()
+```
+
+
+## Plot Histogram for CD3 length comparison
+
+```{r}
+gghistogram(a_b_bind, x = "cdr_length", fill= "status", add= "mean", alpha=0.5,  shape=21, binwidth = 1) +
+  labs(y="Frequency", x= "Length of CDR3 fragment", title = "Comparison of CDR3 length across disease conditons" ) + 
+  theme(plot.title = element_text(hjust = 0.5))
+dev.copy(
+  svg,
+  width=8,
+  height=8,
+  file=  "CD3_length_comparison_histo.svg"
+)
+dev.off()
+```
+
+# Germline gene usage
+
+
+## Plot heatmaps for V gene usage
+
+```{r, fig.width=12, fig.height=12}
+
+
+v_freqs <- a_b_bind %>% select(v_call, status) %>% table()
+Heatmap(v_freqs, column_title = "V Gene usage", row_title = "V Genes",name = "counts", cluster_columns = FALSE)
+dev.copy(
+  svg,
+  width=8,
+  height=12,
+  file=  "V_usage_heatmap.svg"
+)
+dev.off()
+
+
+```
+
+
+## Plot heatmaps for J gene usage
+
+```{r}
+
+j_freqs <- a_b_bind %>% select(j_call, status)  %>% table()
+j_freqs
+Heatmap(j_freqs, column_title = "J Gene usage", row_title = "J Genes",name = "counts", cluster_columns = FALSE)
+dev.copy(
+  svg,
+  width=8,
+  height=12,
+  file=  "J_usage_heatmap.svg"
+)
+dev.off()
+ 
+```
+
+## Plot dotplot for V-J gene usage
+
+```{r, fig.width=14, fig.height=10}
+
+ggplot(a_b_bind, aes(x=v_call, y=j_call, color=status))+geom_count() + theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(y="J Genes", x= "V Genes", title = "Germline usage" )+ facet_wrap(~status)
+
+dev.copy(
+  svg,
+  width=12,
+  height=12,
+  file=  "V_J_usage_dotplot.svg"
+)
+dev.off()
+
+```
+
+
+# Amino Acid usage
+
+## Arrange data to count amino acid in each disease condition 
+
+
+
+
+```{r}
+
+# split data into healthy and disaese and count 
+
+split_aa_healthy <- a_b_bind %>% filter(status=="healthy")  #filter rows for healthy
+split_aa_healthy <- unlist(strsplit(split_aa_healthy$cdr3_aa, split = "")) #split amino acid sequences to character and unlist them all into one vector  
+split_aa_healthy <- as.data.frame(table(split_aa_healthy)) # count frequencies for each amino acid
+split_aa_healthy$Freq_per <- split_aa_healthy$Freq/sum(split_aa_healthy$Freq) # calculate proportions 
+split_aa_healthy <- split_aa_healthy %>% arrange(desc(Freq_per)) #arrange in descending order
+split_aa_healthy$status <- "healthy" # add a column with healthy
+split_aa_healthy <- split_aa_healthy %>% dplyr::rename(amino_acid=split_aa_healthy) # rename column
+
+
+
+
+split_aa_disease <- a_b_bind %>% filter(status=="disease") #filter rows for disease
+split_aa_disease <- unlist(strsplit(split_aa_disease$cdr3_aa, split = ""))#split amino acid sequences to character and unlist them all into one vector  
+split_aa_disease <- as.data.frame(table(split_aa_disease))# count frequencies for each amino acid
+split_aa_disease$Freq_per <- split_aa_disease$Freq/sum(split_aa_disease$Freq)# calculate proportions
+split_aa_disease <- split_aa_disease %>% arrange(desc(Freq_per))#arrange in descending order
+split_aa_disease$status <- "disease"  # add a column with disease
+split_aa_disease <- split_aa_disease %>% dplyr::rename(amino_acid=split_aa_disease)# rename column
+
+head(split_aa_healthy)
+head(split_aa_disease)
+
+
+AA_freq <- rbind(split_aa_healthy, split_aa_disease) #bind both dfs together row-wise
+head(AA_freq)
+
+```
+
+
+## Barplot for amino acid usage
+```{r}
+
+ggplot(AA_freq, aes(x=factor(amino_acid, levels = unique(amino_acid) ), y= Freq_per, fill= status))+ # using factor to keep the order of amino acid according to df as set previously
+  geom_bar(stat="identity",position = "dodge")+
+  labs(title= "Amino acid usage across disease conditions", y= "Freqeucny Distribution", x= "Amino Acids")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+dev.copy(
+  svg,
+  width=8,
+  height=12,
+  file=  "Amino_acid_usage_barplot.svg"
+)
+dev.off()
+
+```
+
+
+## Heatmap for amino acid usage 
+
+```{r}
+# make from long format to wide format
+AA_freq_long <- pivot_wider(data = AA_freq, names_from = status, values_from = c(Freq, Freq_per)) %>% as.data.frame()
+rownames(AA_freq_long) <- AA_freq_long$amino_acid
+head(AA_freq_long)
+
+```
+
+
+
+```{r, fig.height=12, fig.width=8}
+AA_freq_mat <- AA_freq_long[,c("Freq_per_healthy", "Freq_per_disease")] # chose only proportion columns
+AA_freq_mat <- as.matrix(AA_freq_mat) # make into matrix to help heatmap
+AA_freq_mat %>% head
+
+#make heatmap
+Heatmap(AA_freq_mat, column_title = "Amino Acid Usage", row_title = "Amino Acid",name = "Frequency", cluster_columns = FALSE)
+dev.copy(
+  svg,
+  width=8,
+  height=12,
+  file=  "Amino_acid_usage_heatmap.svg"
+)
+dev.off()
+
+
+```
+
+
+
+
+

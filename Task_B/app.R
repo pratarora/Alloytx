@@ -282,7 +282,18 @@ tags$ol(
 tags$ol(
   tags$li("Generate graph button should come after ld score calculation"),
 ),
-            ),
+  h2("Question 3"),
+  p("Given a dataset of 10 million sequences and 100 selected lead candidates sequences, what
+would be a viable approach to identify additional 'interesting' sequences from the dataset
+using similarity networks?"),
+  p("Some of the ways can be:"),
+tags$ul(
+  tags$li("Collapse similar nodes together. similar LD scores can be clustered together? This might reduce the number of nodes"),
+  tags$li("Subset the network based on the LD score -- perform th enetwork based analysis later"),
+  tags$li("Personalized pagerank based on the 100 sequences and their neighbours will help utilize the full power of network but also reduce the load of using full network"),
+),
+
+
             sidebarLayout(
               # sidebar panel UI-------------
               sidebarPanel(
@@ -327,6 +338,6 @@ tags$ol(
               # Main Panel ------------
               mainPanel(
                 visNetworkOutput("network_graph",height = "800px"),)
-            ))
+            )))
 
 shinyApp(ui = ui, server = server)

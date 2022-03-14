@@ -1,0 +1,4 @@
+File,Species,Status,nb_sequences
+Task_1_dataset_A.csv,Human,Healthy,1000
+Task_1_dataset_B.csv,Human,Disease,1000
+Task_2_dataset.csv,Human,Healthy,90

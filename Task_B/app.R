@@ -282,7 +282,7 @@ tags$ol(
 tags$ol(
   tags$li("Generate graph button should come after ld score calculation"),
 ),
-  h2("Question 3"),
+  h2("What if dealing with very big data?"),
   p("Given a dataset of 10 million sequences and 100 selected lead candidates sequences, what
 would be a viable approach to identify additional 'interesting' sequences from the dataset
 using similarity networks?"),

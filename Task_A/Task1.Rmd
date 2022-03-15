@@ -12,7 +12,7 @@ output:
 ```{r}
 rm(list = ls())
 gc()
-setwd("/mnt/c/Users/prata/Desktop/Alloytx/Task_Bioinformatics/Task_Bioinformatics/data/")
+setwd("/mnt/c/Users/prata/Desktop/Task_Bioinformatics/Task_Bioinformatics/data/")
 getwd()
 set.seed(1234)
 ```
